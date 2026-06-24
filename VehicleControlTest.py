@@ -5,6 +5,7 @@ import pygame
 import time
 import threading
 import RPi.GPIO as GPIO
+import can
 
 # ==========================================
 # Gear 설정
@@ -52,6 +53,36 @@ GPIO.setup(BUZZER_PIN, GPIO.OUT)
 
 buzzer = GPIO.PWM(BUZZER_PIN, 2000)
 buzzer.start(0)
+
+# ==========================================
+# CAN 초기화
+# ==========================================
+
+can_bus = can.interface.Bus(
+    channel="can0",
+    interface="socketcan"
+)
+
+# ==========================================
+# CAN TX 0x100
+# VehicleControlCmd
+#
+# B0 : DriveCmd
+# B1 : SteeringCmd
+# ==========================================
+
+def send_vehicle_control(speed_cmd, steer_cmd):
+
+    msg = can.Message(
+        arbitration_id=0x100,
+        data=bytes([
+            speed_cmd,
+            steer_cmd
+        ]),
+        is_extended_id=False
+    )
+
+    can_bus.send(msg)
 
 # ==========================================
 # pygame 초기화
@@ -163,6 +194,12 @@ beep_thread = threading.Thread(
 beep_thread.start()
 
 # ==========================================
+# CAN TX TIMER
+# ==========================================
+
+last_can_tx = 0
+
+# ==========================================
 # 메인 루프
 # ==========================================
 
@@ -193,7 +230,7 @@ try:
             gear_state = GEAR_R
 
         # ==============================
-        # PCA On / Off
+        # PCA On / Off (Edge Trigger)
         # ==============================
 
         current_pca_button = js.get_button(BUTTON_PCA)
@@ -254,6 +291,24 @@ try:
             # 전진 금지
             if speed_byte < 127:
                 speed_byte = 127
+
+        # ==============================
+        # CAN 송신 (0x100)
+        # VehicleControlCmd
+        # B0 = DriveCmd
+        # B1 = SteeringCmd
+        # ==============================
+
+        now = time.time()
+
+        if now - last_can_tx >= 0.012:
+
+            send_vehicle_control(
+                speed_byte,
+                steer_byte
+            )
+
+            last_can_tx = now
 
         # ==============================
         # 기어 표시
