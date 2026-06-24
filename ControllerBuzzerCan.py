@@ -6,6 +6,7 @@ import time
 import threading
 import RPi.GPIO as GPIO
 import can
+import struct
 
 # ==========================================
 # CAN INIT
@@ -101,6 +102,12 @@ pca_enabled = 0
 auto_parking_cmd = 0
 
 # ==========================================
+# LINE ANGLE
+# ==========================================
+
+line_angle_cmd = 0  # -180 ~ 180
+
+# ==========================================
 # BUZZER
 # ==========================================
 
@@ -152,7 +159,13 @@ def get_max_level():
 # B3 PCAActivatedTF
 # ==========================================
 
-def send_vehicle_status(speed, steer, gear, pca_en):
+def send_vehicle_status(speed, steer, gear, pca_en, line_angle):
+
+    # int16 (-180 ~ 180)
+    line_angle_int = int(line_angle)
+
+    # little-endian signed 16-bit
+    line_bytes = struct.pack("<h", line_angle_int)
 
     msg = can.Message(
         arbitration_id=0x201,
@@ -160,7 +173,9 @@ def send_vehicle_status(speed, steer, gear, pca_en):
             speed,
             steer,
             gear,
-            pca_en
+            pca_en,
+            line_bytes[0],
+            line_bytes[1]
         ]),
         is_extended_id=False
     )
@@ -387,7 +402,8 @@ try:
                 speed,
                 steer,
                 gear_state,
-                pca_enabled
+                pca_enabled,
+                line_angle_cmd
             )
 
             last_201 = now
@@ -408,16 +424,11 @@ try:
         # STATUS PRINT
         # ==================================
 
-        print("Speed:", speed)
-        print("Steer:", steer)
-        print("Gear:", gear_state)
-        print("PCA Enabled:", pca_enabled)
-        print("PCA ECU State:", pca_state)
-        print("Vehicle Speed:", vehicle_speed)
-        print("Gear From ECU:", gear_status_from_ecu)
-        print("Emergency Stop:", emergency_stop)
-        print("Exit Status:", exit_status)
-        print("Max Obstacle Level:", get_max_level())
+        print(
+            f"Speed:{speed} Steer:{steer} Gear:{gear_state} "
+            f"PCA:{pca_enabled} Angle:{line_angle_cmd} "
+            f"Obs:{get_max_level()} Exit:{exit_status}"
+        )
         print("--------------------------------")
 
         time.sleep(0.01)
