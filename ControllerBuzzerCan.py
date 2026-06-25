@@ -154,7 +154,6 @@ def send_vehicle_status(speed, steer, gear, pca_en, line_angle):
             line_bytes[1]
         ]),
         is_extended_id=False,
-        is_fd=True
     )
 
     can_bus.send(msg)
